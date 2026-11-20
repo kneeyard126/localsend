@@ -290,6 +290,47 @@ Future<void> _pickText(BuildContext context, Ref ref) async {
 }
 
 Future<void> _pickClipboard(BuildContext context, Ref ref) async {
+  // File managers can offer the same selection as files, text paths and
+  // image thumbnails. Preserve the actual files before considering those
+  // alternate representations.
+  List<String> files;
+  try {
+    files = await Pasteboard.files();
+  } on MissingPluginException {
+    // File clipboard access is not implemented on every mobile platform.
+    files = [];
+  } on PlatformException catch (e) {
+    _logger.warning('Could not read files from clipboard', e);
+    files = [];
+  }
+  if (files.isNotEmpty) {
+    await ref
+        .redux(selectedSendingFilesProvider)
+        .dispatchAsync(
+          AddFilesAction(
+            files: files.map((e) => XFile(e)).toList(),
+            converter: (file) async {
+              if (!file.path.startsWith('content://')) {
+                return CrossFileConverters.convertXFile(file);
+              }
+              // handle content uri
+              return CrossFile(
+                name: file.name,
+                fileType: file.name.guessFileType(),
+                size: await _uriContent.getContentLength(Uri.parse(file.path)) ?? -1,
+                path: file.path,
+                thumbnail: null,
+                asset: null,
+                bytes: null,
+                lastModified: null,
+                lastAccessed: null,
+              );
+            },
+          ),
+        );
+    return;
+  }
+
   final data = await Clipboard.getData(Clipboard.kTextPlain);
   if (data?.text != null) {
     ref.redux(selectedSendingFilesProvider).dispatch(AddMessageAction(message: data!.text!));
@@ -323,35 +364,6 @@ Future<void> _pickClipboard(BuildContext context, Ref ref) async {
             bytes: currImage,
             fileType: FileType.image,
             fileName: fileName,
-          ),
-        );
-    return;
-  }
-
-  final List<String> files = await Pasteboard.files();
-  if (files.isNotEmpty) {
-    await ref
-        .redux(selectedSendingFilesProvider)
-        .dispatchAsync(
-          AddFilesAction(
-            files: files.map((e) => XFile(e)).toList(),
-            converter: (file) async {
-              if (!file.path.startsWith('content://')) {
-                return CrossFileConverters.convertXFile(file);
-              }
-              // handle content uri
-              return CrossFile(
-                name: file.name,
-                fileType: file.name.guessFileType(),
-                size: await _uriContent.getContentLength(Uri.parse(file.path)) ?? -1,
-                path: file.path,
-                thumbnail: null,
-                asset: null,
-                bytes: null,
-                lastModified: null,
-                lastAccessed: null,
-              );
-            },
           ),
         );
     return;
