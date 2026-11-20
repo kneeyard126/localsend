@@ -1,6 +1,8 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:localsend_app/model/cross_file.dart';
+import 'package:localsend_app/model/persistence/conversation_entry.dart';
 import 'package:localsend_app/model/send_mode.dart';
 import 'package:localsend_app/model/state/send/send_session_state.dart';
 import 'package:localsend_app/model/state/send/sending_file.dart';
@@ -8,6 +10,7 @@ import 'package:localsend_app/pages/home_page.dart';
 import 'package:localsend_app/pages/home_page_controller.dart';
 import 'package:localsend_app/pages/progress_page.dart';
 import 'package:localsend_app/pages/send_page.dart';
+import 'package:localsend_app/provider/conversation_provider.dart';
 import 'package:localsend_app/provider/device_info_provider.dart';
 import 'package:localsend_app/provider/file_transfer_provider.dart';
 import 'package:localsend_app/provider/http_provider.dart';
@@ -58,6 +61,7 @@ class SendNotifier extends Notifier<Map<String, SendSessionState>> {
   /// is no longer waiting for a decision.
   /// Session ID -> Cancel token
   final _prepareUploadCancelTokens = <String, rust_cancel.RsCancellationToken>{};
+  final _conversationSessions = <String>{};
 
   @override
   Map<String, SendSessionState> init() {
@@ -89,16 +93,60 @@ class SendNotifier extends Notifier<Map<String, SendSessionState>> {
     required Device target,
     required List<CrossFile> files,
     required bool background,
+    String? conversationSessionId,
+    List<String>? conversationFileIds,
+  }) async {
+    if (files.isEmpty) return;
+    if (conversationFileIds != null && conversationFileIds.length != files.length) throw ArgumentError('File IDs must match the selection');
+    final sessionId = conversationSessionId ?? _uuid.v4();
+    if (conversationSessionId != null) _conversationSessions.add(sessionId);
+    try {
+      await _startSession(sessionId: sessionId, target: target, files: files, background: background, conversationFileIds: conversationFileIds);
+    } finally {
+      _syncConversation(sessionId, terminal: true);
+      if (conversationSessionId != null) {
+        closeSession(sessionId);
+        _conversationSessions.remove(sessionId);
+      }
+    }
+  }
+
+  Future<void> _startSession({
+    required String sessionId,
+    required Device target,
+    required List<CrossFile> files,
+    required bool background,
+    List<String>? conversationFileIds,
   }) async {
     // Pinned to the device the user picked, so the request is not sent at all
     // if someone else answers on that address.
     final client = ref.read(httpProvider).pinnedTo(target.fingerprint);
-    final sessionId = _uuid.v4();
     final createChecksums = ref.read(settingsProvider).createChecksums;
 
     // The ids are assigned upfront, so the checksums calculated below
     // can be mapped back to the corresponding file.
-    final selectedFiles = files.map((file) => (id: _uuid.v4(), file: file)).toList();
+    final selectedFiles = [for (var i = 0; i < files.length; i++) (id: conversationFileIds?[i] ?? _uuid.v4(), file: files[i])];
+
+    final history = ref.notifier(conversationProvider);
+    for (final (:id, :file) in selectedFiles) {
+      final previous = history.state.where((e) => e.id == 'out:$sessionId:$id').firstOrNull;
+      history.upsert(
+        ConversationEntry(
+          id: 'out:$sessionId:$id',
+          peer: target,
+          outgoing: true,
+          timestamp: previous?.timestamp ?? DateTime.now().toUtc(),
+          delivery: ConversationDelivery.waiting,
+          sessionId: sessionId,
+          fileId: id,
+          fileName: file.name,
+          fileType: file.fileType,
+          fileSize: file.size,
+          text: files.length == 1 && file.fileType == FileType.text ? createMessagePreview(file.bytes) : null,
+          path: file.path,
+        ),
+      );
+    }
 
     state = state.updateSession(
       sessionId: sessionId,
@@ -565,6 +613,8 @@ class SendNotifier extends Notifier<Map<String, SendSessionState>> {
       return;
     }
 
+    _syncConversation(sessionId, terminal: true);
+
     // The transfer is over, the process no longer needs to be kept alive for it.
     TransferNotification.stop(sessionId);
 
@@ -615,6 +665,7 @@ class SendNotifier extends Notifier<Map<String, SendSessionState>> {
 
     if (isRetry) {
       _logger.info('Retrying ${file.file.fileName}');
+      ref.notifier(conversationProvider).updateDelivery('out:$sessionId:${file.file.id}', ConversationDelivery.sending);
 
       ref.notifier(fileTransferProvider).setStatus(sessionId: sessionId, fileId: file.file.id, status: FileStatus.queue);
       state = state.updateSession(
@@ -700,6 +751,7 @@ class SendNotifier extends Notifier<Map<String, SendSessionState>> {
           case HttpUploadFileStartedEvent():
             _logger.info('Sending ${state[sessionId]?.files[event.fileId]?.file.fileName}');
             ref.notifier(fileTransferProvider).setStatus(sessionId: sessionId, fileId: event.fileId, status: FileStatus.sending);
+            ref.notifier(conversationProvider).updateDelivery('out:$sessionId:${event.fileId}', ConversationDelivery.sending);
           case HttpUploadFileProgressEvent():
             ref
                 .notifier(fileTransferProvider)
@@ -720,9 +772,11 @@ class SendNotifier extends Notifier<Map<String, SendSessionState>> {
                 );
             _updateForegroundServiceProgress(sessionId);
             ref.notifier(fileTransferProvider).setStatus(sessionId: sessionId, fileId: event.fileId, status: FileStatus.finished);
+            ref.notifier(conversationProvider).updateDelivery('out:$sessionId:${event.fileId}', ConversationDelivery.delivered);
           case HttpUploadFileFailedEvent():
             _logger.warning('Error while sending file ${state[sessionId]?.files[event.fileId]?.file.fileName}: ${event.error}');
             ref.notifier(fileTransferProvider).setStatus(sessionId: sessionId, fileId: event.fileId, status: FileStatus.failed);
+            ref.notifier(conversationProvider).updateDelivery('out:$sessionId:${event.fileId}', ConversationDelivery.failed, error: event.error);
             state = state.updateSession(
               sessionId: sessionId,
               state: (s) => s?.withFileError(event.fileId, event.error),
@@ -754,6 +808,7 @@ class SendNotifier extends Notifier<Map<String, SendSessionState>> {
         ),
       );
     } finally {
+      _syncConversation(sessionId);
       state = state.updateSession(
         sessionId: sessionId,
         state: (s) => s?.copyWith(
@@ -769,6 +824,7 @@ class SendNotifier extends Notifier<Map<String, SendSessionState>> {
     if (sessionState == null) {
       return;
     }
+    ref.notifier(conversationProvider).finishSession(sessionId, outgoing: true, delivery: ConversationDelivery.cancelled);
     final remoteSessionId = sessionState.remoteSessionId;
 
     _cancelRunningRequests(sessionState);
@@ -808,6 +864,7 @@ class SendNotifier extends Notifier<Map<String, SendSessionState>> {
     if (sessionState == null) {
       return;
     }
+    ref.notifier(conversationProvider).finishSession(sessionId, outgoing: true, delivery: ConversationDelivery.cancelled);
     TransferNotification.stop(sessionId);
     _cancelRunningRequests(sessionState);
 
@@ -841,11 +898,14 @@ class SendNotifier extends Notifier<Map<String, SendSessionState>> {
     if (sessionState == null) {
       return;
     }
+    _syncConversation(sessionId, terminal: true);
     TransferNotification.stop(sessionId);
     _hashCancelTokens.remove(sessionId)?.cancel();
     _prepareUploadCancelTokens.remove(sessionId)?.cancel();
     state = state.removeSession(ref, sessionId);
-    if (sessionState.status == SessionStatus.finished && ref.read(settingsProvider).sendMode == SendMode.single) {
+    if (!_conversationSessions.contains(sessionId) &&
+        sessionState.status == SessionStatus.finished &&
+        ref.read(settingsProvider).sendMode == SendMode.single) {
       // clear selected files
       ref.redux(selectedSendingFilesProvider).dispatch(ClearSelectionAction());
     }
@@ -853,6 +913,7 @@ class SendNotifier extends Notifier<Map<String, SendSessionState>> {
 
   void clearAllSessions() {
     for (final sessionId in state.keys) {
+      ref.notifier(conversationProvider).finishSession(sessionId, outgoing: true, delivery: ConversationDelivery.cancelled);
       TransferNotification.stop(sessionId);
     }
     for (final cancelToken in _hashCancelTokens.values) {
@@ -872,6 +933,30 @@ class SendNotifier extends Notifier<Map<String, SendSessionState>> {
       sessionId: sessionId,
       state: (s) => s?.copyWith(background: background),
     );
+  }
+
+  void _syncConversation(String sessionId, {bool terminal = false}) {
+    final session = state[sessionId];
+    if (session == null) return;
+    final history = ref.notifier(conversationProvider);
+    final transfer = ref.read(fileTransferProvider);
+    for (final file in session.files.values) {
+      final id = 'out:$sessionId:${file.file.id}';
+      if (!history.state.any((e) => e.id == id && e.inFlight)) continue;
+      final status = transfer.getStatus(sessionId: sessionId, fileId: file.file.id);
+      final delivery = switch (session.status) {
+        SessionStatus.declined => ConversationDelivery.declined,
+        SessionStatus.canceledBySender || SessionStatus.canceledByReceiver => ConversationDelivery.cancelled,
+        SessionStatus.recipientBusy || SessionStatus.tooManyAttempts => ConversationDelivery.failed,
+        _ when status == FileStatus.finished => ConversationDelivery.delivered,
+        _ when status == FileStatus.failed => ConversationDelivery.failed,
+        _ when session.status == SessionStatus.finished && file.file.preview != null => ConversationDelivery.delivered,
+        _ when status == FileStatus.skipped || session.status == SessionStatus.finished => ConversationDelivery.declined,
+        _ when terminal => ConversationDelivery.failed,
+        _ => null,
+      };
+      if (delivery != null) history.updateDelivery(id, delivery, error: file.errorMessage ?? session.errorMessage);
+    }
   }
 }
 

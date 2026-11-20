@@ -149,6 +149,7 @@ void main() {
       final client = _HttpClient();
       final ref = RefenaContainer(
         overrides: [
+          persistenceProvider.overrideWithValue(MockPersistenceService()),
           settingsProvider.overrideWithNotifier((ref) => _TestSettingsService(MockPersistenceService())),
           httpProvider.overrideWithBuilder((_) => _HttpClientCollection(client)),
           deviceFullInfoProvider.overrideWithBuilder((_) => _createDevice(fingerprint: 'self')),

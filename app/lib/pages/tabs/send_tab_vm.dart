@@ -3,10 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:localsend_app/model/cross_file.dart';
 import 'package:localsend_app/model/persistence/favorite_device.dart';
 import 'package:localsend_app/model/send_mode.dart';
+import 'package:localsend_app/pages/home_page.dart';
+import 'package:localsend_app/pages/home_page_controller.dart';
 import 'package:localsend_app/pages/progress_page.dart';
 import 'package:localsend_app/pages/send_page.dart';
 import 'package:localsend_app/pages/tabs/send_tab.dart';
 import 'package:localsend_app/pages/web_share_page.dart';
+import 'package:localsend_app/provider/conversation_provider.dart';
 import 'package:localsend_app/provider/favorites_provider.dart';
 import 'package:localsend_app/provider/local_ip_provider.dart';
 import 'package:localsend_app/provider/network/nearby_devices_provider.dart';
@@ -145,10 +148,9 @@ final sendTabVmProvider = ViewProvider((ref) {
     onTapDevice: (context, device) async {
       var files = selectedFiles;
       if (files.isEmpty) {
-        await AddFileDialog.open(
-          context: context,
-          options: pickerOptions,
-        );
+        ref.notifier(selectedConversationProvider).select(device);
+        ref.redux(homePageControllerProvider).dispatch(ChangeTabAction(HomeTab.conversations));
+        return;
       }
 
       files = ref.read(selectedSendingFilesProvider);

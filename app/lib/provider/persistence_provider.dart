@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:localsend_app/gen/strings.g.dart';
 import 'package:localsend_app/model/persistence/color_mode.dart';
+import 'package:localsend_app/model/persistence/conversation_entry.dart';
 import 'package:localsend_app/model/persistence/favorite_device.dart';
 import 'package:localsend_app/model/persistence/quick_save_mode.dart';
 import 'package:localsend_app/model/persistence/receive_history_entry.dart';
@@ -54,6 +55,7 @@ const _stunServers = 'ls_stun_servers';
 
 // Received file history
 const _receiveHistory = 'ls_receive_history';
+const _conversationHistory = 'ls_conversation_history_v1';
 
 // Favorites
 const _favorites = 'ls_favorites';
@@ -263,6 +265,22 @@ class PersistenceService {
   Future<void> setReceiveHistory(List<ReceiveHistoryEntry> entries) async {
     final historyRaw = entries.map((entry) => jsonEncode(entry.toJson())).toList();
     await _prefs.setStringList(_receiveHistory, historyRaw);
+  }
+
+  List<ConversationEntry> getConversationHistory() {
+    final entries = <ConversationEntry>[];
+    for (final raw in _prefs.getStringList(_conversationHistory) ?? <String>[]) {
+      try {
+        entries.add(ConversationEntry.fromJson(jsonDecode(raw)));
+      } catch (e) {
+        _logger.warning('Skipping an invalid conversation history entry', e);
+      }
+    }
+    return entries;
+  }
+
+  Future<void> setConversationHistory(List<ConversationEntry> entries) async {
+    await _prefs.setStringList(_conversationHistory, entries.map((entry) => jsonEncode(entry.toJson())).toList());
   }
 
   List<FavoriteDevice> getFavorites() {

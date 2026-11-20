@@ -95,6 +95,8 @@ class TranslationsZhCn extends Translations with BaseTranslations<AppLocale, Tra
   late final Translations$web$zh_CN web = Translations$web$zh_CN.internal(_root);
   @override
   late final Translations$assetPicker$zh_CN assetPicker = Translations$assetPicker$zh_CN.internal(_root);
+  @override
+  late final Translations$conversations$zh_CN conversations = Translations$conversations$zh_CN.internal(_root);
 }
 
 // Path: general
@@ -838,6 +840,99 @@ class Translations$assetPicker$zh_CN extends Translations$assetPicker$en {
   String get sNameDurationLabel => '时长';
   @override
   String get sUnitAssetCountLabel => '计数';
+}
+
+// Path: conversations
+class Translations$conversations$zh_CN extends Translations$conversations$en {
+  Translations$conversations$zh_CN.internal(TranslationsZhCn root) : this._root = root, super.internal(root);
+
+  final TranslationsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '会话';
+  @override
+  String get subtitle => '让设备，聊起来。';
+  @override
+  String get emptyTitle => '近一点，就能分享。';
+  @override
+  String get emptyHint => '选择附近的设备，开始发送文字、链接和文件。';
+  @override
+  String get newConversation => '连接设备';
+  @override
+  String get nearby => '附近设备';
+  @override
+  String get history => '最近会话';
+  @override
+  String get discovered => '已发现';
+  @override
+  String get lastAddress => '上次连接地址';
+  @override
+  String get search => '搜索设备或消息';
+  @override
+  String get searchMessages => '搜索当前会话';
+  @override
+  String get noResults => '没有找到相关会话';
+  @override
+  String get compose => '写点什么，或添加文件…';
+  @override
+  String get send => '发送';
+  @override
+  String get attach => '添加附件';
+  @override
+  String get keyboardHint => 'Enter 发送 · Shift + Enter 换行';
+  @override
+  String get localHistoryHint => '仅保存在本机 · 最近 1,000 条';
+  @override
+  String get historyDisabled => '已关闭保存历史，新消息仅在本次运行期间保留。';
+  @override
+  String get saveError => '历史记录暂时无法保存，请保持应用打开并检查存储空间。';
+  @override
+  String get queueHint => '按顺序发送到此设备';
+  @override
+  String get waiting => '等待对方接收';
+  @override
+  String get sending => '传输中';
+  @override
+  String get delivered => '已送达';
+  @override
+  String get received => '已接收';
+  @override
+  String get failed => '发送失败';
+  @override
+  String get declined => '未接收';
+  @override
+  String get cancelled => '已取消';
+  @override
+  String get interrupted => '传输已中断';
+  @override
+  String get retry => '重新发送';
+  @override
+  String get openLink => '打开链接';
+  @override
+  String get sourceUnavailable => '原文件已不可用，请重新选择文件。';
+  @override
+  String get clearHistory => '清空当前会话';
+  @override
+  String get clearConfirm => '从本机移除这段会话记录？已接收的文件会保留。';
+  @override
+  String get chatOnlyLan => '请选择局域网设备开始会话。';
+  @override
+  String get unverified => '未加密 HTTP';
+  @override
+  String get secureTransport => 'HTTPS';
+  @override
+  String get queueFull => '发送队列已满，请等待一项传输完成。';
+  @override
+  String get largeTextHint => '较长的文字会作为完整文本文件发送。';
+  @override
+  String get attachmentHint => '保留原文件 · 不压缩';
+  @override
+  String get back => '所有会话';
+  @override
+  String get removeAttachment => '移除附件';
+  @override
+  String get savedToGallery => '已存入相册';
 }
 
 // Path: receiveTab.infoBox

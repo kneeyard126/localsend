@@ -1,14 +1,17 @@
 import 'dart:async';
 import 'dart:convert';
+
 import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:localsend_app/model/persistence/conversation_entry.dart';
 import 'package:localsend_app/model/state/server/receive_session_state.dart';
 import 'package:localsend_app/model/state/server/receiving_file.dart';
 import 'package:localsend_app/pages/home_page.dart';
 import 'package:localsend_app/pages/home_page_controller.dart';
 import 'package:localsend_app/pages/progress_page.dart';
 import 'package:localsend_app/pages/receive_page.dart';
+import 'package:localsend_app/provider/conversation_provider.dart';
 import 'package:localsend_app/provider/device_info_provider.dart';
 import 'package:localsend_app/provider/favorites_provider.dart';
 import 'package:localsend_app/provider/file_transfer_provider.dart';
@@ -22,6 +25,7 @@ import 'package:localsend_app/provider/security_provider.dart';
 import 'package:localsend_app/provider/selection/selected_receiving_files_provider.dart';
 import 'package:localsend_app/provider/selection/selected_sending_files_provider.dart';
 import 'package:localsend_app/provider/settings_provider.dart';
+import 'package:localsend_app/util/conversation_message_policy.dart';
 import 'package:localsend_app/util/native/directories.dart';
 import 'package:localsend_app/util/native/platform_check.dart';
 import 'package:localsend_app/util/native/tray_helper.dart';
@@ -126,6 +130,28 @@ class ReceiveController {
           statuses: {for (final file in files.values) file.id: FileStatus.queue},
         );
 
+    final incomingSession = server.getState().session!;
+    final inlineMessage = incomingSession.message;
+    final history = server.ref.notifier(conversationProvider);
+    for (final file in files.values) {
+      history.upsert(
+        ConversationEntry(
+          id: 'in:$sessionId:${file.id}',
+          peer: incomingSession.sender.copyWith(alias: incomingSession.senderAlias),
+          outgoing: false,
+          timestamp: DateTime.now().toUtc(),
+          delivery: inlineMessage != null ? ConversationDelivery.delivered : ConversationDelivery.waiting,
+          sessionId: sessionId,
+          fileId: file.id,
+          fileName: file.fileName,
+          fileType: file.fileType,
+          fileSize: file.size,
+          text: inlineMessage,
+          path: null,
+        ),
+      );
+    }
+
     bool quickSave = settings.quickSave && server.getState().session?.message == null;
     final quickSaveFromFavorites = settings.quickSaveFromFavorites && server.getState().session?.message == null;
     if (quickSaveFromFavorites) {
@@ -157,10 +183,6 @@ class ReceiveController {
       return;
     }
 
-    if (checkPlatformHasTray() && (await windowManager.isMinimized() || !(await windowManager.isVisible()) || !(await windowManager.isFocused()))) {
-      await showFromTray();
-    }
-
     final message = server.getState().session?.message;
     if (message != null) {
       // Message already received
@@ -179,6 +201,22 @@ class ReceiveController {
               timestamp: DateTime.now().toUtc(),
             ),
           );
+
+      // An open conversation explicitly opts into live text from that device.
+      // Require the authenticated TLS identity; an unencrypted peer cannot
+      // impersonate the selected device by copying its claimed fingerprint.
+      if (canReceiveLiveConversationText(
+        selected: server.ref.read(selectedConversationProvider),
+        verifiedFingerprint: event.certFingerprint,
+        conversationVisible: server.ref.read(homePageControllerProvider).currentTab == HomeTab.conversations,
+      )) {
+        await acceptFileRequest({});
+        return;
+      }
+    }
+
+    if (checkPlatformHasTray() && (await windowManager.isMinimized() || !(await windowManager.isVisible()) || !(await windowManager.isFocused()))) {
+      await showFromTray();
     }
 
     final receiveProvider = ViewProvider((ref) {
@@ -258,6 +296,7 @@ class ReceiveController {
 
     // begin of actual file transfer
     server.ref.notifier(fileTransferProvider).setStatus(sessionId: event.sessionId, fileId: fileId, status: FileStatus.sending);
+    server.ref.notifier(conversationProvider).updateDelivery('in:${event.sessionId}:$fileId', ConversationDelivery.sending);
     if (receiveState.startTime == null || receiveState.status != SessionStatus.sending) {
       server.setState(
         (oldState) => oldState?.copyWith(
@@ -336,6 +375,17 @@ class ReceiveController {
     final fileType = receivingFile.file.fileType;
     final filePath = event.path;
     final error = event.error;
+
+    server.ref
+        .notifier(conversationProvider)
+        .updateDelivery(
+          'in:${event.sessionId}:$fileId',
+          error == null ? ConversationDelivery.delivered : ConversationDelivery.failed,
+          path: error == null ? filePath : null,
+          fileName: receivingFile.desiredName,
+          savedToGallery: error == null && event.savedToGallery,
+          error: error,
+        );
 
     if (error == null) {
       server.ref.notifier(fileTransferProvider).setStatus(sessionId: event.sessionId, fileId: fileId, status: FileStatus.finished);
@@ -621,6 +671,8 @@ class ReceiveController {
       return;
     }
 
+    server.ref.notifier(conversationProvider).finishSession(session.sessionId, outgoing: false, delivery: ConversationDelivery.declined);
+
     server.ref.redux(parentIsolateProvider).dispatch(IsolateHttpServerPrepareUploadDecisionAction(config: null));
     closeSession();
   }
@@ -656,6 +708,7 @@ class ReceiveController {
       // the server is not running
       return;
     }
+    server.ref.notifier(conversationProvider).finishSession(session.sessionId, outgoing: false, delivery: ConversationDelivery.cancelled);
 
     // fail further uploads
     server.ref.redux(parentIsolateProvider).dispatch(IsolateHttpServerCancelSessionAction(sessionId: session.sessionId));
@@ -685,6 +738,7 @@ class ReceiveController {
     if (sessionId == null) {
       return;
     }
+    server.ref.notifier(conversationProvider).finishSession(sessionId, outgoing: false, delivery: ConversationDelivery.cancelled);
 
     TransferNotification.stop(sessionId);
 
@@ -702,6 +756,7 @@ void _cancelBySender(ServerUtils server) {
   if (receiveSession == null) {
     return;
   }
+  server.ref.notifier(conversationProvider).finishSession(receiveSession.sessionId, outgoing: false, delivery: ConversationDelivery.cancelled);
 
   TransferNotification.stop(receiveSession.sessionId);
 

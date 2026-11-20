@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:localsend_app/model/persistence/conversation_entry.dart';
 import 'package:localsend_app/pages/home_page.dart';
 import 'package:localsend_app/pages/home_page_controller.dart';
+import 'package:localsend_app/provider/conversation_outbox_provider.dart';
+import 'package:localsend_app/provider/conversation_provider.dart';
+import 'package:localsend_app/util/message_preview.dart';
+import 'package:localsend_app/util/native/conversation_picker.dart';
 import 'package:localsend_app/util/native/exit_helper.dart';
 import 'package:localsend_app/util/native/file_picker.dart';
 import 'package:localsend_app/util/native/platform_check.dart';
@@ -40,6 +45,19 @@ class ShortcutWatcher extends StatelessWidget {
           _PopPageIntent: CallbackAction(onInvoke: (_) async => Navigator.of(Routerino.context).maybePop()),
           _PasteIntent: CallbackAction(
             onInvoke: (_) async {
+              final ref = context.ref;
+              final peer = ref.read(selectedConversationProvider);
+              if (peer != null && ref.read(homePageControllerProvider).currentTab == HomeTab.conversations) {
+                final files = await pickConversationAttachments(context, FilePickerOption.clipboard);
+                final preview = files.length == 1 ? createMessagePreview(files.single.bytes) : null;
+                final id = conversationPeerId(peer);
+                if (preview != null) {
+                  ref.notifier(conversationDraftsProvider).set(id, '${ref.read(conversationDraftsProvider)[id] ?? ''}$preview');
+                } else {
+                  ref.notifier(conversationAttachmentsProvider).add(id, files);
+                }
+                return null;
+              }
               await context.global.dispatchAsync(PickFileAction(option: FilePickerOption.clipboard, context: context));
               if (context.mounted) {
                 context.redux(homePageControllerProvider).dispatch(ChangeTabAction(HomeTab.send));

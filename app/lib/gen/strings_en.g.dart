@@ -73,6 +73,7 @@ class Translations with BaseTranslations<AppLocale, Translations> {
   late final Translations$tray$en tray = Translations$tray$en.internal(_root);
   late final Translations$web$en web = Translations$web$en.internal(_root);
   late final Translations$assetPicker$en assetPicker = Translations$assetPicker$en.internal(_root);
+  late final Translations$conversations$en conversations = Translations$conversations$en.internal(_root);
 }
 
 // Path: general
@@ -946,6 +947,141 @@ class Translations$assetPicker$en {
 
   /// en: 'count'
   String get sUnitAssetCountLabel => 'count';
+}
+
+// Path: conversations
+class Translations$conversations$en {
+  Translations$conversations$en.internal(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+
+  /// en: 'Chats'
+  String get title => 'Chats';
+
+  /// en: 'Your devices, in one conversation.'
+  String get subtitle => 'Your devices, in one conversation.';
+
+  /// en: 'A little closer.'
+  String get emptyTitle => 'A little closer.';
+
+  /// en: 'Choose a nearby device to share messages, links and files.'
+  String get emptyHint => 'Choose a nearby device to share messages, links and files.';
+
+  /// en: 'Connect a device'
+  String get newConversation => 'Connect a device';
+
+  /// en: 'Nearby devices'
+  String get nearby => 'Nearby devices';
+
+  /// en: 'Recent conversations'
+  String get history => 'Recent conversations';
+
+  /// en: 'Discovered'
+  String get discovered => 'Discovered';
+
+  /// en: 'Last known address'
+  String get lastAddress => 'Last known address';
+
+  /// en: 'Find a device or message'
+  String get search => 'Find a device or message';
+
+  /// en: 'Search this conversation'
+  String get searchMessages => 'Search this conversation';
+
+  /// en: 'No matching conversations'
+  String get noResults => 'No matching conversations';
+
+  /// en: 'Write a message…'
+  String get compose => 'Write a message…';
+
+  /// en: 'Send'
+  String get send => 'Send';
+
+  /// en: 'Add an attachment'
+  String get attach => 'Add an attachment';
+
+  /// en: 'Enter to send · Shift + Enter for a new line'
+  String get keyboardHint => 'Enter to send · Shift + Enter for a new line';
+
+  /// en: 'Stored on this device · Latest 1,000 items'
+  String get localHistoryHint => 'Stored on this device · Latest 1,000 items';
+
+  /// en: 'History saving is off. New messages stay in memory for this session.'
+  String get historyDisabled => 'History saving is off. New messages stay in memory for this session.';
+
+  /// en: 'History could not be saved. Keep the app open and check available storage.'
+  String get saveError => 'History could not be saved. Keep the app open and check available storage.';
+
+  /// en: 'Sent in order to this device'
+  String get queueHint => 'Sent in order to this device';
+
+  /// en: 'Waiting for recipient'
+  String get waiting => 'Waiting for recipient';
+
+  /// en: 'Transferring'
+  String get sending => 'Transferring';
+
+  /// en: 'Delivered'
+  String get delivered => 'Delivered';
+
+  /// en: 'Received'
+  String get received => 'Received';
+
+  /// en: 'Failed'
+  String get failed => 'Failed';
+
+  /// en: 'Not accepted'
+  String get declined => 'Not accepted';
+
+  /// en: 'Cancelled'
+  String get cancelled => 'Cancelled';
+
+  /// en: 'Interrupted'
+  String get interrupted => 'Interrupted';
+
+  /// en: 'Send again'
+  String get retry => 'Send again';
+
+  /// en: 'Open link'
+  String get openLink => 'Open link';
+
+  /// en: 'The original file is no longer available. Please select it again.'
+  String get sourceUnavailable => 'The original file is no longer available. Please select it again.';
+
+  /// en: 'Clear this conversation'
+  String get clearHistory => 'Clear this conversation';
+
+  /// en: 'Remove this conversation history from this device? Your files will be kept.'
+  String get clearConfirm => 'Remove this conversation history from this device? Your files will be kept.';
+
+  /// en: 'Choose a local-network device to start a conversation.'
+  String get chatOnlyLan => 'Choose a local-network device to start a conversation.';
+
+  /// en: 'Unencrypted HTTP'
+  String get unverified => 'Unencrypted HTTP';
+
+  /// en: 'HTTPS'
+  String get secureTransport => 'HTTPS';
+
+  /// en: 'The outgoing queue is full. Please wait for a transfer to finish.'
+  String get queueFull => 'The outgoing queue is full. Please wait for a transfer to finish.';
+
+  /// en: 'Long text will be sent as a complete text file.'
+  String get largeTextHint => 'Long text will be sent as a complete text file.';
+
+  /// en: 'Original files · No compression'
+  String get attachmentHint => 'Original files · No compression';
+
+  /// en: 'All conversations'
+  String get back => 'All conversations';
+
+  /// en: 'Remove attachment'
+  String get removeAttachment => 'Remove attachment';
+
+  /// en: 'Saved to gallery'
+  String get savedToGallery => 'Saved to gallery';
 }
 
 // Path: receiveTab.infoBox

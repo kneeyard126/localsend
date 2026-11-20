@@ -5,11 +5,16 @@ import 'package:flutter/material.dart';
 import 'package:localsend_app/config/init.dart';
 import 'package:localsend_app/config/theme.dart';
 import 'package:localsend_app/gen/strings.g.dart';
+import 'package:localsend_app/model/persistence/conversation_entry.dart';
 import 'package:localsend_app/pages/home_page_controller.dart';
+import 'package:localsend_app/pages/tabs/conversations_tab.dart';
 import 'package:localsend_app/pages/tabs/receive_tab.dart';
 import 'package:localsend_app/pages/tabs/send_tab.dart';
 import 'package:localsend_app/pages/tabs/settings_tab.dart';
+import 'package:localsend_app/provider/conversation_outbox_provider.dart';
+import 'package:localsend_app/provider/conversation_provider.dart';
 import 'package:localsend_app/provider/selection/selected_sending_files_provider.dart';
+import 'package:localsend_app/util/native/conversation_picker.dart';
 import 'package:localsend_app/util/native/cross_file_converters.dart';
 import 'package:localsend_app/widget/responsive_builder.dart';
 import 'package:refena_flutter/refena_flutter.dart';
@@ -17,6 +22,7 @@ import 'package:refena_flutter/refena_flutter.dart';
 enum HomeTab {
   receive(Icons.wifi),
   send(Icons.send),
+  conversations(Icons.chat_bubble_outline_rounded),
   settings(Icons.settings)
   ;
 
@@ -32,6 +38,8 @@ enum HomeTab {
         return t.sendTab.title;
       case HomeTab.settings:
         return t.settingsTab.title;
+      case HomeTab.conversations:
+        return t.conversations.title;
     }
   }
 }
@@ -83,6 +91,13 @@ class _HomePageState extends State<HomePage> with Refena {
         });
       },
       onDragDone: (event) async {
+        setState(() => _dragAndDropIndicator = false);
+        final chat = ref.read(selectedConversationProvider);
+        if (vm.currentTab == HomeTab.conversations && chat != null) {
+          final files = await collectConversationDrop(event.files);
+          ref.notifier(conversationAttachmentsProvider).add(conversationPeerId(chat), files);
+          return;
+        }
         // the drop may contain a mix of files and directories
         final droppedDirectories = event.files.where((file) => Directory(file.path).existsSync()).toList();
         final droppedFiles = event.files.where((file) => !Directory(file.path).existsSync()).toList();
@@ -145,6 +160,7 @@ class _HomePageState extends State<HomePage> with Refena {
                           children: const [
                             ReceiveTab(),
                             SendTab(),
+                            ConversationsTab(),
                             SettingsTab(),
                           ],
                         ),
